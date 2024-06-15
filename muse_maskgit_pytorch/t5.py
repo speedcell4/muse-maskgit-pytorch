@@ -8,8 +8,10 @@ from typing import List, Union
 
 transformers.logging.set_verbosity_error()
 
+
 def exists(val):
     return val is not None
+
 
 # config
 
@@ -19,15 +21,18 @@ DEFAULT_T5_NAME = 'google/t5-v1_1-base'
 
 T5_CONFIGS = {}
 
+
 # singleton globals
 
 def get_tokenizer(name):
     tokenizer = T5Tokenizer.from_pretrained(name)
     return tokenizer
 
+
 def get_model(name):
     model = T5EncoderModel.from_pretrained(name)
     return model
+
 
 def get_model_and_tokenizer(name):
     global T5_CONFIGS
@@ -40,6 +45,7 @@ def get_model_and_tokenizer(name):
         T5_CONFIGS[name]["tokenizer"] = get_tokenizer(name)
 
     return T5_CONFIGS[name]['model'], T5_CONFIGS[name]['tokenizer']
+
 
 def get_encoded_dim(name):
     if name not in T5_CONFIGS:
@@ -54,13 +60,14 @@ def get_encoded_dim(name):
         assert False
     return config.d_model
 
+
 # encoding text
 
 @beartype
 def t5_encode_text(
-    texts: Union[str, List[str]],
-    name = DEFAULT_T5_NAME,
-    output_device = None
+        texts: Union[str, List[str]],
+        name=DEFAULT_T5_NAME,
+        output_device=None
 ):
     if isinstance(texts, str):
         texts = [texts]
@@ -74,10 +81,10 @@ def t5_encode_text(
 
     encoded = tokenizer.batch_encode_plus(
         texts,
-        return_tensors = "pt",
-        padding = 'longest',
-        max_length = MAX_LENGTH,
-        truncation = True
+        return_tensors="pt",
+        padding='longest',
+        max_length=MAX_LENGTH,
+        truncation=True
     )
 
     input_ids = encoded.input_ids.to(device)
@@ -86,7 +93,7 @@ def t5_encode_text(
     t5.eval()
 
     with torch.no_grad():
-        output = t5(input_ids = input_ids, attention_mask = attn_mask)
+        output = t5(input_ids=input_ids, attention_mask=attn_mask)
         encoded_text = output.last_hidden_state.detach()
 
     attn_mask = attn_mask.bool()

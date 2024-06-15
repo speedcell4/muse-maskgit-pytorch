@@ -7,17 +7,21 @@ from torch import nn, einsum
 import torch.nn.functional as F
 
 from memory_efficient_attention_pytorch.flash_attention import FlashAttentionFunction
+
 # constants
 
 AttentionConfig = namedtuple('AttentionConfig', ['enable_flash', 'enable_math', 'enable_mem_efficient'])
+
 
 # helpers
 
 def exists(val):
     return val is not None
 
+
 def once(fn):
     called = False
+
     @wraps(fn)
     def inner(x):
         nonlocal called
@@ -25,18 +29,21 @@ def once(fn):
             return
         called = True
         return fn(x)
+
     return inner
 
+
 print_once = once(print)
+
 
 # main class
 
 class Attend(nn.Module):
     def __init__(
-        self,
-        scale = 8,
-        dropout = 0.,
-        flash = False
+            self,
+            scale=8,
+            dropout=0.,
+            flash=False
     ):
         super().__init__()
         self.scale = scale
@@ -44,7 +51,8 @@ class Attend(nn.Module):
         self.attn_dropout = nn.Dropout(dropout)
 
         self.flash = flash
-        assert not (flash and version.parse(torch.__version__) < version.parse('2.0.0')), 'in order to use flash attention, you must be using pytorch 2.0 or above'
+        assert not (flash and version.parse(torch.__version__) < version.parse(
+            '2.0.0')), 'in order to use flash attention, you must be using pytorch 2.0 or above'
 
         # determine efficient attention configs for cuda and cpu
 
@@ -63,7 +71,7 @@ class Attend(nn.Module):
             print_once('Non-A100 GPU detected, using math or mem efficient attention if input tensor is on cuda')
             self.cuda_config = AttentionConfig(False, True, False)
 
-    def flash_attn(self, q, k, v, mask = None):
+    def flash_attn(self, q, k, v, mask=None):
         default_scale = q.shape[-1] ** -0.5
 
         is_cuda = q.is_cuda
@@ -95,18 +103,19 @@ class Attend(nn.Module):
             with torch.backends.cuda.sdp_kernel(**self.cuda_config._asdict()):
                 out = F.scaled_dot_product_attention(
                     q, k, v,
-                    attn_mask = mask,
-                    dropout_p = self.dropout if self.training else 0.
+                    attn_mask=mask,
+                    dropout_p=self.dropout if self.training else 0.
                 )
         except:
-            print_once('no hardware detected, falling back to naive implementation from memory-efficient-attention-pytorch library')
+            print_once(
+                'no hardware detected, falling back to naive implementation from memory-efficient-attention-pytorch library')
             self.no_hardware_detected = True
 
             out = FlashAttentionFunction.apply(q, k, v, mask, False, 512, 512)
 
         return out
 
-    def forward(self, q, k, v, mask = None, force_non_flash = False):
+    def forward(self, q, k, v, mask=None, force_non_flash=False):
         """
         einstein notation
         b - batch
@@ -116,7 +125,7 @@ class Attend(nn.Module):
         """
 
         if self.flash and not force_non_flash:
-            return self.flash_attn(q, k, v, mask = mask)
+            return self.flash_attn(q, k, v, mask=mask)
 
         # similarity
 
@@ -130,7 +139,7 @@ class Attend(nn.Module):
 
         # attention
 
-        attn = sim.softmax(dim = -1)
+        attn = sim.softmax(dim=-1)
         attn = self.attn_dropout(attn)
 
         # aggregate values
